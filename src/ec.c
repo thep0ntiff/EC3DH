@@ -13,31 +13,46 @@
 
 static void ec_calculate_coordinates(const ec_domain_params_t *curve, const uint256_t *lambda, const ec_point_t *P, const ec_point_t *Q, ec_point_t *R) {
 
-    uint256_t lambda2, delta_x, mx; // Most of these are for readability... For a "slim" function, remove these and use R as temporary value holder
+    uint256_t lambda2, tmp, mx; 
     uint256_t two = {{2, 0, 0, 0}};
 
 
     // Calculate xR
     mod_exp(lambda, &two, &curve->p, &lambda2);
-    mod_sub(&P->x, &Q->x, &curve->p, &delta_x);
-    mod_sub(&lambda2, &delta_x, &curve->p, &R->x);
+    mod_sub(&lambda2, &P->x, &curve->p, &tmp);
+    mod_sub(&tmp, &Q->x, &curve->p, &R->x);
 
     // Calculate yR
-    mod_sub(&P->x, &R->x, &curve->p, &delta_x);
-    mod_mul(lambda, &delta_x, &curve->p, &mx);
+    mod_sub(&P->x, &R->x, &curve->p, &tmp);
+    mod_mul(lambda, &tmp, &curve->p, &mx);
     mod_sub(&mx, &P->y, &curve->p, &R->y);
    
 
 }
 
-void ec_negate_point(const ec_domain_params_t *curve, ec_point_t *P, ec_point_t *R) {
+void ec_negate_point(const ec_domain_params_t *curve, const ec_point_t *P, ec_point_t *R) {
 
+    if (P->infinity) {
+        *R = *P;
+        return;
+    }
+    
+    R->x = P->x;
+    mod_sub(&curve->p, &P->y, &curve->p, &R->y);
+    R->infinity = P->infinity;
     
 
 }
 
 
-void ec_double_point(const ec_domain_params_t *curve, const ec_point_t *P, const ec_point_t *R) {
+void ec_double_point(const ec_domain_params_t *curve, const ec_point_t *P, ec_point_t *R) {
+    
+    if (P->infinity) {
+        R->infinity = 1;
+        R->x = (uint256_t){{0}};
+        R->y = (uint256_t){{0}};
+        return;
+    }
 
     uint256_t three = {{3, 0, 0, 0}};
     uint256_t two = {{2, 0, 0, 0}};
@@ -55,11 +70,10 @@ void ec_double_point(const ec_domain_params_t *curve, const ec_point_t *P, const
 }
 
 
-void ec_add_point(const ec_domain_params_t *curve, ec_point_t *P, ec_point_t *Q, ec_point_t *R) {
+void ec_add_point(const ec_domain_params_t *curve, const ec_point_t *P, const ec_point_t *Q, ec_point_t *R) {
     
-    /* This function expects you to know what you're doing and does not check for bad input */
     
-    if (!(uint256_cmp(&P->x, &Q->x) + (uint256_cmp(&Q->y, &P->y)))) {
+    if ((uint256_cmp(&P->x, &Q->x) && (uint256_cmp(&P->y, &Q->y))) == 0) { 
         ec_double_point(curve, P, R);
         return;
     }
@@ -85,10 +99,25 @@ void ec_add_point(const ec_domain_params_t *curve, ec_point_t *P, ec_point_t *Q,
     ec_calculate_coordinates(curve, &lambda, P, Q, R);
 }
 
+int ec_point_on_curve(const ec_domain_params_t *curve, const ec_point_t *P) {
+    if (P->infinity) return 1;
+    uint256_t y2, x3, ax, rhs;
+    
+    /* Calculate y2 = x3 + ax + b (mod p)
+     * Returns 0 if the point lies on the curve */
+    
+    mod_mul(&P->y, &P->y, &curve->p, &y2);
+    mod_exp(&P->x, &(uint256_t){{3, 0, 0, 0}}, &curve->p, &x3);
+    mod_mul(&curve->a, &P->x, &curve->p, &ax);
+    mod_add(&x3, &ax, &curve->p, &rhs);
+    mod_add(&rhs, &curve->b, &curve->p, &rhs);
+
+    return uint256_cmp(&rhs, &y2);
+}
 
 void ec_scalar_multiply(const ec_domain_params_t *curve) {
 
-    
+       
     
 }
 

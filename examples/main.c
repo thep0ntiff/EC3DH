@@ -21,5 +21,8 @@ int main(void) {
 
     ec_point_t R;
     ec_add_point(&secp256r1, &P, &P, &R);
-
+    int p_on_curve = ec_point_on_curve(&secp256r1, &P);
+    printf("P: %d\n", p_on_curve);
+    int r_on_curve = ec_point_on_curve(&secp256r1, &R);
+    printf("R: %d\n", r_on_curve);
 }
