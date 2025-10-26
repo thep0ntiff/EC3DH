@@ -75,6 +75,7 @@ void ec_double_point(const ec_domain_params_t *curve, const ec_point_t *P, ec_po
     mod_mul(&y2, &sum, &curve->p, &lambda);
 
     ec_calculate_coordinates(curve, &lambda, P, P, R);
+    R->infinity = 0;
 }
 
 
@@ -105,6 +106,7 @@ void ec_add_point(const ec_domain_params_t *curve, const ec_point_t *P, const ec
     mod_mul(&delta_y, &delta_x, &curve->p, &lambda);
     
     ec_calculate_coordinates(curve, &lambda, P, Q, R);
+    R->infinity = 0;
 }
 
 int ec_point_on_curve(const ec_domain_params_t *curve, const ec_point_t *P) {
