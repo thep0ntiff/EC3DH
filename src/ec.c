@@ -9,6 +9,14 @@
 #include "curve_params.h"
 
 #include <modplus.h>
+#include <stdio.h>
+#include <string.h>
+
+static void uint256_print_hex(const uint256_t *x) {
+    for (int i = 0; i < 4; i++) {
+        printf("%lx", x->limb[i]);
+    }
+}
 
 
 static void ec_calculate_coordinates(const ec_domain_params_t *curve, const uint256_t *lambda, const ec_point_t *P, const ec_point_t *Q, ec_point_t *R) {
@@ -49,8 +57,8 @@ void ec_double_point(const ec_domain_params_t *curve, const ec_point_t *P, ec_po
     
     if (P->infinity) {
         R->infinity = 1;
-        R->x = (uint256_t){{0}};
-        R->y = (uint256_t){{0}};
+        memset(&R->x, 0, sizeof(R->x));
+        memset(&R->y, 0, sizeof(R->y));
         return;
     }
 
@@ -73,7 +81,7 @@ void ec_double_point(const ec_domain_params_t *curve, const ec_point_t *P, ec_po
 void ec_add_point(const ec_domain_params_t *curve, const ec_point_t *P, const ec_point_t *Q, ec_point_t *R) {
     
     
-    if ((uint256_cmp(&P->x, &Q->x) && (uint256_cmp(&P->y, &Q->y))) == 0) { 
+    if (uint256_cmp(&P->x, &Q->x) == 0 && uint256_cmp(&P->y, &Q->y) == 0) { 
         ec_double_point(curve, P, R);
         return;
     }
@@ -115,9 +123,64 @@ int ec_point_on_curve(const ec_domain_params_t *curve, const ec_point_t *P) {
     return uint256_cmp(&rhs, &y2);
 }
 
-void ec_scalar_multiply(const ec_domain_params_t *curve) {
+void ec_scalar_multiply(const ec_domain_params_t *curve, const uint256_t *k, const ec_point_t *P, ec_point_t *R) {
+    /* Double-and-add approach */
 
-       
-    
+    ec_point_t Q, temp;
+    Q.infinity = 1;  // Initialize accumulator to point-at-infinity
+
+    printf("Starting scalar multiplication\n");
+
+    for (int i = 255; i >= 0; i--) {
+        /* Double Q */
+        if (!Q.infinity) {
+            ec_double_point(curve, &Q, &temp);  // temp = 2*Q
+            Q = temp;
+        }
+
+        /* Print after doubling */
+        printf("Bit %3d after doubling: Q = (", i);
+        if (!Q.infinity) {
+            uint256_print_hex(&Q.x);
+            printf(",");
+            uint256_print_hex(&Q.y);
+        } else {
+            printf("INFINITY");
+        }
+        printf("), infinity=%d\n", Q.infinity);
+
+        /* Add P if current bit is 1 */
+        if (uint256_test_bit(k, i)) {
+            if (Q.infinity) {
+                Q = *P;  // Q = P if Q was infinity
+            } else {
+                ec_add_point(curve, &Q, P, &temp);  // temp = Q + P
+                Q = temp;
+            }
+
+            /* Print after addition */
+            printf("Bit %3d after addition: Q = (", i);
+            if (!Q.infinity) {
+                uint256_print_hex(&Q.x);
+                printf(",");
+                uint256_print_hex(&Q.y);
+            } else {
+                printf("INFINITY");
+            }
+            printf("), infinity=%d\n", Q.infinity);
+        }
+
+    }
+
+    *R = Q;
+
+    printf("Scalar multiplication completed: R = (");
+    if (!R->infinity) {
+        uint256_print_hex(&R->x);
+        printf(",");
+        uint256_print_hex(&R->y);
+    } else {
+        printf("INFINITY");
+    }
+    printf("), infinity=%d\n", R->infinity);
 }
-

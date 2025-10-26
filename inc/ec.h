@@ -21,7 +21,7 @@ typedef struct {
 
 void ec_negate_point(const ec_domain_params_t *curve, const ec_point_t *P, ec_point_t *R);
 void ec_add_point(const ec_domain_params_t *curve, const ec_point_t *P, const ec_point_t *Q, ec_point_t *R);
-void ec_scalar_multiply(const ec_domain_params_t *curve);
+void ec_scalar_multiply(const ec_domain_params_t *curve, const uint256_t *k, const ec_point_t *P, ec_point_t *R);
 
 int ec_point_on_curve(const ec_domain_params_t *curve, const ec_point_t *P);
 
