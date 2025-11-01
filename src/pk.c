@@ -24,7 +24,7 @@
 #endif
 
 
-ssize_t pk_getrandom_bytes(void *buf, size_t buflen, unsigned int flags) {
+ssize_t kp_getrandom_bytes(void *buf, size_t buflen, unsigned int flags) {
 
     size_t off = 0;
     while (off < buflen) {
@@ -46,13 +46,13 @@ ssize_t pk_getrandom_bytes(void *buf, size_t buflen, unsigned int flags) {
     return (ssize_t)off;
 }
 
-int pk_generate_private_key(const ec_domain_params_t *curve, uint256_t *private_key) {
+int kp_generate_private_key(const ec_domain_params_t *curve, uint256_t *private_key) {
     unsigned char bytes[BUFLEN];
     ssize_t result;
     int rare_event = 0;
 
     do {
-        result = pk_getrandom_bytes(bytes, BUFLEN, 0);
+        result = kp_getrandom_bytes(bytes, BUFLEN, 0);
         if (result < 0) {
             return -1;
         }

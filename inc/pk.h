@@ -17,7 +17,8 @@
 
 #define BUFLEN 32
 
-ssize_t pk_getrandom_bytes(void *buf, size_t buflen, unsigned int flags);
-int pk_generate_private_key(const ec_domain_params_t *curve, uint256_t *private_key);
+ssize_t kp_getrandom_bytes(void *buf, size_t buflen, unsigned int flags);
+int kp_generate_private_key(const ec_domain_params_t *curve, uint256_t *private_key);
+
 
 #endif

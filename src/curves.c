@@ -38,7 +38,8 @@ const ec_domain_params_t secp256r1 = {
             0x2bce33576b315eceULL,
             0x8ee7eb4a7c0f9e16ULL,
             0x4fe342e2fe1a7f9bULL 
-        }}
+        }},
+        .infinity = 0
     },
     .n = { .limb = { 
         0xf3b9cac2fc632551ULL,
