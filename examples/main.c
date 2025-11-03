@@ -2,9 +2,42 @@
 #include "curve_params.h"
 #include "pk.h"
 #include "ec3dh.h"
+#include "sha256.h"
 
 #include <stdio.h>
+#include <string.h>
 
+void test_diffie_hellman_kdf() {
+    uint256_t alice_priv, bob_priv;
+    ec_point_t alice_pub, bob_pub;
+    
+    ec3dh_generate_keypair(&secp256r1, &alice_priv, &alice_pub);
+    ec3dh_generate_keypair(&secp256r1, &bob_priv, &bob_pub);
+    
+    uint8_t alice_enc_key[32];
+    uint8_t alice_mac_key[32];
+    
+    ec3dh_compute_shared_secret_dk(
+        &secp256r1, &alice_priv, &bob_pub,
+        alice_enc_key, 32,
+        alice_mac_key, 32
+    );
+    
+    uint8_t bob_enc_key[32];
+    uint8_t bob_mac_key[32];
+    
+    ec3dh_compute_shared_secret_dk(
+        &secp256r1, &bob_priv, &alice_pub,
+        bob_enc_key, 32,
+        bob_mac_key, 32
+    );
+    
+    printf("Encryption keys match: %d\n", 
+           memcmp(alice_enc_key, bob_enc_key, 32) == 0);
+    printf("MAC keys match: %d\n",
+           memcmp(alice_mac_key, bob_mac_key, 32) == 0);
+    
+}
 
 
 int main(void) {
@@ -45,46 +78,10 @@ int main(void) {
     printf("R_scalar: %d\n", r_scalar_on_curve);
     
     
-    uint256_t alice_privatekey, bob_privatekey = {0};
-    ec_point_t alice_pubkey, bob_pubkey = {0};
-    uint256_t alice_shared, bob_shared = {0};
-
-    ec3dh_generate_keypair(&secp256r1, &alice_privatekey, &alice_pubkey);
-    ec3dh_generate_keypair(&secp256r1, &bob_privatekey, &bob_pubkey);
-
-    printf("Alice's public key:\n x: ");
-    for (int i = 0; i < 4; i++) {
-        printf("%016lx", alice_pubkey.x.limb[i]);
-    }
-    printf("\n y: ");
-    for (int i = 0; i < 4; i++) {
-        printf("%016lx", alice_pubkey.y.limb[i]);
-    }
-    printf("\n\n");
-
-    printf("Bob's public key:\n x: ");
-    for (int i = 0; i < 4; i++) {
-        printf("%016lx", bob_pubkey.x.limb[i]);
-    }
-    printf("\n y: ");
-    for (int i = 0; i < 4; i++) {
-        printf("%016lx", bob_pubkey.y.limb[i]);
-    }
-    printf("\n\n");
-
-    ec3dh_compute_shared_secret(&secp256r1, &alice_privatekey, &bob_pubkey, &alice_shared);
-    ec3dh_compute_shared_secret(&secp256r1, &bob_privatekey, &alice_pubkey, &bob_shared);
-
-    printf("\nAlice's shared secret: ");
-    for (int i = 0; i < 4; i++) {
-        printf("%016lx", alice_shared.limb[i]);
-    }
+    test_diffie_hellman_kdf();
     
-    printf("\nBob's shared secret:   ");
-    for (int i = 0; i < 4; i++) {
-        printf("%016lx", bob_shared.limb[i]);
-    }
-    printf("\n");
+    
+
 
     return 0;
 }
