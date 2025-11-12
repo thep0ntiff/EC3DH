@@ -37,12 +37,6 @@ ssize_t kp_getrandom_bytes(void *buf, size_t buflen, unsigned int flags) {
         off += (size_t)r;
 
     }
-    unsigned char *b = (unsigned char *)buf;
-    printf("Random bytes:\n");
-    for (size_t i = 0; i < buflen; i++) {
-        printf("%02x", b[i]);
-    }
-    printf("\n");
     return (ssize_t)off;
 }
 

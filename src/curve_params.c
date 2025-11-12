@@ -47,5 +47,5 @@ const ec_domain_params_t secp256r1 = {
         0xffffffffffffffffULL,
         0xffffffff00000000ULL
     }},
-    .h = 2
+    .h = 1
 };

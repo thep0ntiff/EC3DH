@@ -38,7 +38,6 @@ int hkdf_expand(const uint8_t prk[32],
     uint8_t counter = 1;
     
     while (offset < okm_len) {
-        SHA256_ctx_t ctx;
         uint8_t hmac_input[32 + 256 + 1];  // T || info || counter
         size_t hmac_input_len = 0;
         
@@ -92,7 +91,6 @@ int ecdh_derive_key(const uint256_t *shared_secret,
                     uint8_t *output,
                     size_t output_len) {
     
-    // Convert uint256_t to big-endian byte array
     uint8_t secret_bytes[32];
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 8; j++) {
@@ -100,7 +98,6 @@ int ecdh_derive_key(const uint256_t *shared_secret,
         }
     }
     
-    // Use HKDF with no salt (uses zero salt internally)
     int result = hkdf(NULL, 0,
                       secret_bytes, 32,
                       (const uint8_t *)info, strlen(info),

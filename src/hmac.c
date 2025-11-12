@@ -9,7 +9,7 @@
 #include <string.h>
 
 
-void hmac_sha256(const uint8_t *key, size_t key_len, const uint8_t *data, size_t date_len, uint8_t output[32]) {
+void hmac_sha256(const uint8_t *key, size_t key_len, const uint8_t *data, size_t data_len, uint8_t output[32]) {
     
     uint8_t k[64];
     uint8_t k_ipad[64];
@@ -31,8 +31,8 @@ void hmac_sha256(const uint8_t *key, size_t key_len, const uint8_t *data, size_t
     }
 
     sha256_init(&ctx);
-    sha256_update(&ctx, k_opad, 64);
-    sha256_update(&ctx, data, date_len);
+    sha256_update(&ctx, k_ipad, 64);
+    sha256_update(&ctx, data, data_len);
     sha256_final(&ctx, inner_hash);
 
     sha256_init(&ctx);
