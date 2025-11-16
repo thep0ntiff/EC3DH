@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -O2 -Iinc -fPIC -g
+CFLAGS = -Wall -Wextra -O2 -Iinc -fPIC
 LDFLAGS = -shared -lmodplus
 
 SRC_DIR = src

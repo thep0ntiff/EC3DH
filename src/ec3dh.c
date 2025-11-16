@@ -28,6 +28,8 @@ int ec3dh_generate_keypair(const ec_domain_params_t *curve, uint256_t *private_k
         fprintf(stderr, "Pubkey generation failed.\n");
         return -1;
     }
+
+
     return 0;
 }
 
@@ -51,6 +53,8 @@ int ec3dh_compute_shared_secret_dk(ec_domain_params_t *curve, uint256_t *private
     if (shared_point.infinity) {
         return -1;
     }
+
+    ec_jacobian_to_affine(curve, &shared_point, &shared_point);
 
     uint256_t shared_secret = shared_point.x;
     

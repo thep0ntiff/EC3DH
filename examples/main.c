@@ -59,6 +59,10 @@ int main(void) {
     for (int i = 0; i < 4; i++) {
         printf("%016lx", pubkey.y.limb[i]);
     }
+    printf("\n z: ");
+    for (int i = 0; i < 4; i++) {
+        printf("%016lx", pubkey.z.limb[i]);
+    }
     int pubkey_on_curve = ec_point_on_curve(&secp256r1, &pubkey);
     printf("\nOn curve? %d\n", pubkey_on_curve);
 
