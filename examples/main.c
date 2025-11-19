@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 void test_diffie_hellman_kdf() {
     uint256_t alice_priv, bob_priv;
@@ -39,9 +40,8 @@ void test_diffie_hellman_kdf() {
     
 }
 
+void test_ecc() {
 
-int main(void) {
-    
     uint256_t k = {{0}};
     
     
@@ -80,10 +80,37 @@ int main(void) {
     ec_scalar_multiply(&secp256r1, &k, &R, &R_scalar);
     int r_scalar_on_curve = ec_point_on_curve(&secp256r1, &R_scalar);
     printf("R_scalar: %d\n", r_scalar_on_curve);
+}
+
+void benchmark_scalar_multiply() {
+    uint256_t k;
+    ec_point_t result;
+
+    kp_generate_private_key(&secp256r1, &k);
+
+    for (int i = 0; i < 10; i++) {
+        ec_scalar_multiply(&secp256r1, &k, &secp256r1.G, &result);
+    }
+    printf("Starting scalar multiplication benchmark...\n");
+    int iterations = 1000;
+    clock_t start = clock();
+    for (int i = 0; i < iterations; i++) {
+        ec_scalar_multiply(&secp256r1, &k, &secp256r1.G, &result);
+    }
+    clock_t end = clock();
+    double avg_time = ((double)(end - start) / CLOCKS_PER_SEC) / iterations;
     
+    printf("Average scalar multiplication: %.6f ms\n", avg_time * 1000);
+    printf("Operations per second: %.0f\n", 1.0 / avg_time);
+}
+
+int main(void) {
     
+    ec_point_t R_scalar = {0};
+
+    test_ecc();
     test_diffie_hellman_kdf();
-    
+    benchmark_scalar_multiply();
     
 
 
