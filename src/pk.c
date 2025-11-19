@@ -19,13 +19,16 @@
 #include <sys/random.h>
 #include <errno.h>
 #else
-
+#include <windows.h>
+#include <bcrypt.h>
+// Link with bcrypt.lib: add -lbcrypt to linker flags
+#pragma comment(lib, "bcrypt.lib")
 
 #endif
 
 
 ssize_t kp_getrandom_bytes(void *buf, size_t buflen, unsigned int flags) {
-
+#if LINUX
     size_t off = 0;
     while (off < buflen) {
         
@@ -38,6 +41,20 @@ ssize_t kp_getrandom_bytes(void *buf, size_t buflen, unsigned int flags) {
 
     }
     return (ssize_t)off;
+#else
+    NTSTATUS status = BCryptGenRandom(
+        NULL,
+        (PUCHAR)buf,
+        (ULONG)buflen,
+        BCRYPT_USE_SYSTEM_PREFERRED_RNG
+    );
+    
+    if (!BCRYPT_SUCCESS(status)) {
+        return -1;
+    }
+    
+    return (ssize_t)buflen;
+#endif
 }
 
 int kp_generate_private_key(const ec_domain_params_t *curve, uint256_t *private_key) {

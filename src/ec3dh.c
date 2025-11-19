@@ -24,7 +24,7 @@ int ec3dh_generate_keypair(const ec_domain_params_t *curve, uint256_t *private_k
     
     ec_scalar_multiply(curve, private_key, &curve->G, pubkey);
 
-    if (ec_point_on_curve(curve, pubkey) != 0) {
+    if (!ec_point_on_curve(curve, pubkey)) {
         fprintf(stderr, "Pubkey generation failed.\n");
         return -1;
     }
@@ -38,7 +38,7 @@ int ec3dh_compute_shared_secret_dk(ec_domain_params_t *curve, uint256_t *private
     
     ec_point_t shared_point = {0};
 
-    if (ec_point_on_curve(curve, peer_pubkey) != 0) {
+    if (!ec_point_on_curve(curve, peer_pubkey)) {
         fprintf(stderr, "Received pubkey is not on curve!\n");
         return -1;
     }
