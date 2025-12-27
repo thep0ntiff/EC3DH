@@ -206,7 +206,7 @@ void ec_jacobian_to_affine(const ec_domain_params_t *curve, const ec_point_t *P,
     mod_mul(&z_squared, &z_inv, &curve->p, &z_cubed);
     mod_mul(&P->y, &z_cubed, &curve->p, &R->y);
 
-    memset(&R->z, 0, sizeof(R->z));
+    R->z.limb[0] = 1;
     R->infinity = 0;
 
 }
