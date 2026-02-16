@@ -31,6 +31,10 @@ int hkdf_expand(const uint8_t prk[32],
     if (okm_len > 255 * 32) {
         return -1;
     }
+
+    if (info_len > 256) {
+        return -1;
+    }
     
     uint8_t T[32] = {0};
     size_t T_len = 0;

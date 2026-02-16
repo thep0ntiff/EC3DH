@@ -9,6 +9,7 @@
 #include "ec.h"
 
 #include <stdio.h>
+#include <string.h>
 #include <modplus.h>
 
 #if LINUX
@@ -35,6 +36,7 @@ ssize_t kp_getrandom_bytes(void *buf, size_t buflen, unsigned int flags) {
         ssize_t r = getrandom((char *)buf + off, buflen - off, flags);
         if (r < 0) {
             if (errno == EINTR) continue;
+            memset(buf, 0, buflen);
             return -1;
         }
         off += (size_t)r;
@@ -65,6 +67,7 @@ int kp_generate_private_key(const ec_domain_params_t *curve, uint256_t *private_
     do {
         result = kp_getrandom_bytes(bytes, BUFLEN, 0);
         if (result < 0) {
+            memset(bytes, 0, BUFLEN);
             return -1;
         }
 
@@ -79,12 +82,14 @@ int kp_generate_private_key(const ec_domain_params_t *curve, uint256_t *private_
                 ((uint64_t)bytes[i * 8 + 1] << 48)  |
                 ((uint64_t)bytes[i * 8 + 0] << 56);
         }
-        if ((uint256_cmp(private_key, &curve->n) >= 0) || uint256_is_zero(private_key)) {
+        if ((uint256_cmp(private_key, &curve->n) >= 0) || uint256_is_zero(private_key)) { // Leak!
             rare_event = 1;
         }
 
 
     } while (uint256_cmp(private_key, &curve->n) >= 0 || uint256_is_zero(private_key));
+
+    memset(bytes, 0, BUFLEN);
 
     if (rare_event) {
         printf("\n");

@@ -33,10 +33,15 @@ int ec3dh_generate_keypair(const ec_domain_params_t *curve, uint256_t *private_k
     return 0;
 }
 
-int ec3dh_compute_shared_secret_dk(ec_domain_params_t *curve, uint256_t *private_key, ec_point_t *peer_pubkey,
+int ec3dh_compute_shared_secret_dk(const ec_domain_params_t *curve, const uint256_t *private_key, const ec_point_t *peer_pubkey,
                                    uint8_t *encryption_key, size_t enc_key_len, uint8_t *mac_key, size_t mac_key_len) {
-    
+
     ec_point_t shared_point = {0};
+
+    if (uint256_is_zero(private_key) || uint256_cmp(private_key, &curve->n) >= 0) {
+        fprintf(stderr, "Private key is out of range [1, n-1]!\n");
+        return -1;
+    }
 
     if (!ec_point_on_curve(curve, peer_pubkey)) {
         fprintf(stderr, "Received pubkey is not on curve!\n");
@@ -51,6 +56,7 @@ int ec3dh_compute_shared_secret_dk(ec_domain_params_t *curve, uint256_t *private
     ec_scalar_multiply(curve, private_key, peer_pubkey, &shared_point);
     
     if (shared_point.infinity) {
+        memset(&shared_point, 0, sizeof(shared_point));
         return -1;
     }
 

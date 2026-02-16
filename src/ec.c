@@ -173,8 +173,9 @@ static void wnaf_mul_const(const ec_domain_params_t *curve, const ec_point_t *P_
         uint64_t mask_nonzero = 1 - is_zero;
 
         // j = (abs_val - 1) / 2  (safe if abs_val==0; selection masked by mask_nonzero)
-        uint64_t j_raw = 0;
-        if (abs_val != 0) j_raw = ((abs_val - 1) >> 1);
+        // Use constant-time: when abs_val==0, mask_nonzero==0 so j_raw is masked out anyway
+        uint64_t safe_abs = abs_val | (1 - mask_nonzero); // becomes 1 when abs_val==0, avoiding underflow
+        uint64_t j_raw = ((safe_abs - 1) >> 1);
 
         ec_point_t S;
         SelectFromTableConst(T, j_raw, mask_nonzero, &S);
@@ -194,8 +195,16 @@ static void wnaf_mul_const(const ec_domain_params_t *curve, const ec_point_t *P_
 void ec_jacobian_to_affine(const ec_domain_params_t *curve, const ec_point_t *P, ec_point_t *R) {
 
     /* Converts a jacobian projective coordinate back to affine space
-     * P is the jacobian projective coordinate and R is the affine coordinate 
+     * P is the jacobian projective coordinate and R is the affine coordinate
      * For jacobian->affine, (x, y, z) -> (x*(z^-1)^2, y*(z^-1)^3) */
+
+    if (P->infinity || uint256_is_zero(&P->z)) {
+        R->infinity = 1;
+        memset(&R->x, 0, sizeof(R->x));
+        memset(&R->y, 0, sizeof(R->y));
+        memset(&R->z, 0, sizeof(R->z));
+        return;
+    }
 
     uint256_t z_inv, z_squared, z_cubed = {{0}};
 
@@ -206,6 +215,7 @@ void ec_jacobian_to_affine(const ec_domain_params_t *curve, const ec_point_t *P,
     mod_mul(&z_squared, &z_inv, &curve->p, &z_cubed);
     mod_mul(&P->y, &z_cubed, &curve->p, &R->y);
 
+    memset(&R->z, 0, sizeof(R->z));
     R->z.limb[0] = 1;
     R->infinity = 0;
 
@@ -233,6 +243,7 @@ void ec_double_point(const ec_domain_params_t *curve, const ec_point_t *P, ec_po
         R->infinity = 1;
         memset(&R->x, 0, sizeof(R->x));
         memset(&R->y, 0, sizeof(R->y));
+        memset(&R->z, 0, sizeof(R->z));
         return;
     }
 
@@ -343,7 +354,19 @@ void ec_add_point(const ec_domain_params_t *curve, const ec_point_t *P, const ec
 
         mod_sub(&U2, &U1, &curve->p, &H);
         mod_sub(&S2, &S1, &curve->p, &r);
-        
+
+        if (uint256_is_zero(&H)) {
+            if (uint256_is_zero(&r)) {
+                ec_double_point(curve, P, R);
+            } else {
+                R->infinity = 1;
+                memset(&R->x, 0, sizeof(R->x));
+                memset(&R->y, 0, sizeof(R->y));
+                memset(&R->z, 0, sizeof(R->z));
+            }
+            return;
+        }
+
         mod_mul(&H, &H, &curve->p, &h_squared);
         mod_mul(&h_squared, &U1, &curve->p, &temp);
         mod_mul(&temp, &two, &curve->p, &temp);
@@ -373,9 +396,22 @@ void ec_add_point(const ec_domain_params_t *curve, const ec_point_t *P, const ec
     // Calculate Lambda
     mod_sub(&Q->y, &P->y, &curve->p, &delta_y);
     mod_sub(&Q->x, &P->x, &curve->p, &delta_x);
-    mod_inv(&delta_x, &curve->p, &delta_x); // This is bad. Use Jacobian projective coords to avoid modular inversion
+
+    if (uint256_is_zero(&delta_x)) {
+        if (uint256_is_zero(&delta_y)) {
+            ec_double_point(curve, P, R);
+        } else {
+            R->infinity = 1;
+            memset(&R->x, 0, sizeof(R->x));
+            memset(&R->y, 0, sizeof(R->y));
+            memset(&R->z, 0, sizeof(R->z));
+        }
+        return;
+    }
+
+    mod_inv(&delta_x, &curve->p, &delta_x);
     mod_mul(&delta_y, &delta_x, &curve->p, &lambda);
-    
+
     ec_calculate_coordinates(curve, &lambda, P, Q, R);
     R->infinity = 0;
 }
@@ -415,7 +451,7 @@ int ec_point_on_curve(const ec_domain_params_t *curve, const ec_point_t *P) {
     mod_add(&x3, &ax, &curve->p, &rhs);
     mod_add(&rhs, &curve->b, &curve->p, &rhs);
 
-    return uint256_cmp(&rhs, &y2);
+    return (uint256_cmp(&rhs, &y2) == 0);
 }
 
 void ec_scalar_multiply(const ec_domain_params_t *curve, const uint256_t *k, const ec_point_t *P, ec_point_t *R) {

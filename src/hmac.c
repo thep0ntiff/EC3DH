@@ -40,6 +40,7 @@ void hmac_sha256(const uint8_t *key, size_t key_len, const uint8_t *data, size_t
     sha256_update(&ctx, inner_hash, 32);
     sha256_final(&ctx, output);
 
+    memset(&ctx, 0, sizeof(ctx));
     memset(k, 0, 64);
     memset(k_ipad, 0, 64);
     memset(k_opad, 0, 64);
