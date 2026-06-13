@@ -5,6 +5,7 @@
 
 #include "hmac.h"
 #include "sha256.h"
+#include "secure_wipe.h"
 
 #include <string.h>
 
@@ -40,9 +41,9 @@ void hmac_sha256(const uint8_t *key, size_t key_len, const uint8_t *data, size_t
     sha256_update(&ctx, inner_hash, 32);
     sha256_final(&ctx, output);
 
-    memset(&ctx, 0, sizeof(ctx));
-    memset(k, 0, 64);
-    memset(k_ipad, 0, 64);
-    memset(k_opad, 0, 64);
-    memset(inner_hash, 0, 32);
+    secure_wipe(&ctx, sizeof(ctx));
+    secure_wipe(k, 64);
+    secure_wipe(k_ipad, 64);
+    secure_wipe(k_opad, 64);
+    secure_wipe(inner_hash, 32);
 }

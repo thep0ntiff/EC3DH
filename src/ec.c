@@ -9,22 +9,22 @@
 #include "curve_params.h"
 
 #include <modplus.h>
-#include <stdio.h>
 #include <string.h>
 
 #define W 5
-#define L 256
+/* Signed-digit (wNAF) recoding of a 256-bit scalar can carry into one
+ * extra digit, so 257 digits are required to be lossless. */
+#define L 257
 #define TABLE_SIZE  (1 << (W - 2))
 
 
 static void ec_calculate_coordinates(const ec_domain_params_t *curve, const uint256_t *lambda, const ec_point_t *P, const ec_point_t *Q, ec_point_t *R) {
 
-    uint256_t lambda2, tmp, mx; 
-    uint256_t two = {{2, 0, 0, 0}};
+    uint256_t lambda2, tmp, mx;
 
 
     // Calculate xR
-    mod_exp(lambda, &two, &curve->p, &lambda2);
+    mod_mul(lambda, lambda, &curve->p, &lambda2);
     mod_sub(&lambda2, &P->x, &curve->p, &tmp);
     mod_sub(&tmp, &Q->x, &curve->p, &R->x);
 
@@ -50,21 +50,74 @@ static inline uint64_t ct_eq_u64(uint64_t a, uint64_t b) {
 }
 
 
-static inline uint64_t ct_mask(int b) {
-    return -(uint64_t)b;
-}
-
-
-static inline uint64_t ct_abs(int64_t x) {
-    uint64_t mask = -(x < 0);
-    return (x + mask) ^ mask; // returns |x|
-}
+/* The scalar-multiplication ladder works in homogeneous projective
+ * coordinates (x = X/Z, y = Y/Z) so it can use the complete addition
+ * formulas of Renes-Costello-Batina (EUROCRYPT 2016, Algorithm 1).
+ * Those formulas are exception-free on prime-order curves: they handle
+ * P == Q, P == -Q and the identity without any branching, which removes
+ * the secret-dependent control flow the Jacobian add/double have.
+ * The identity is (0 : 1 : 0). */
 
 static void PointSetIdentity(ec_point_t *P) {
-    memset(&P->x, 0, sizeof(uint256_t)); P->x.limb[0] = 1;
+    memset(&P->x, 0, sizeof(uint256_t));
     memset(&P->y, 0, sizeof(uint256_t)); P->y.limb[0] = 1;
-    memset(&P->z, 0, sizeof(uint256_t)); P->z.limb[0] = 0;
+    memset(&P->z, 0, sizeof(uint256_t));
     P->infinity = 1;
+}
+
+/* Complete addition, homogeneous projective coordinates, any curve a.
+ * b3 = 3*b mod p must be supplied by the caller. No branches. */
+static void ec_complete_add(const ec_domain_params_t *curve, const uint256_t *b3,
+                            const ec_point_t *P, const ec_point_t *Q, ec_point_t *R) {
+    const uint256_t *prime = &curve->p;
+    uint256_t t0, t1, t2, t3, t4, t5;
+    uint256_t X3, Y3, Z3;
+
+    mod_mul(&P->x, &Q->x, prime, &t0);
+    mod_mul(&P->y, &Q->y, prime, &t1);
+    mod_mul(&P->z, &Q->z, prime, &t2);
+    mod_add(&P->x, &P->y, prime, &t3);
+    mod_add(&Q->x, &Q->y, prime, &t4);
+    mod_mul(&t3, &t4, prime, &t3);
+    mod_add(&t0, &t1, prime, &t4);
+    mod_sub(&t3, &t4, prime, &t3);
+    mod_add(&P->x, &P->z, prime, &t4);
+    mod_add(&Q->x, &Q->z, prime, &t5);
+    mod_mul(&t4, &t5, prime, &t4);
+    mod_add(&t0, &t2, prime, &t5);
+    mod_sub(&t4, &t5, prime, &t4);
+    mod_add(&P->y, &P->z, prime, &t5);
+    mod_add(&Q->y, &Q->z, prime, &X3);
+    mod_mul(&t5, &X3, prime, &t5);
+    mod_add(&t1, &t2, prime, &X3);
+    mod_sub(&t5, &X3, prime, &t5);
+    mod_mul(&curve->a, &t4, prime, &Z3);
+    mod_mul(b3, &t2, prime, &X3);
+    mod_add(&X3, &Z3, prime, &Z3);
+    mod_sub(&t1, &Z3, prime, &X3);
+    mod_add(&t1, &Z3, prime, &Z3);
+    mod_mul(&X3, &Z3, prime, &Y3);
+    mod_add(&t0, &t0, prime, &t1);
+    mod_add(&t1, &t0, prime, &t1);
+    mod_mul(&curve->a, &t2, prime, &t2);
+    mod_mul(b3, &t4, prime, &t4);
+    mod_add(&t1, &t2, prime, &t1);
+    mod_sub(&t0, &t2, prime, &t2);
+    mod_mul(&curve->a, &t2, prime, &t2);
+    mod_add(&t4, &t2, prime, &t4);
+    mod_mul(&t1, &t4, prime, &t0);
+    mod_add(&Y3, &t0, prime, &Y3);
+    mod_mul(&t5, &t4, prime, &t0);
+    mod_mul(&t3, &X3, prime, &X3);
+    mod_sub(&X3, &t0, prime, &X3);
+    mod_mul(&t3, &t1, prime, &t0);
+    mod_mul(&t5, &Z3, prime, &Z3);
+    mod_add(&Z3, &t0, prime, &Z3);
+
+    R->x = X3;
+    R->y = Y3;
+    R->z = Z3;
+    R->infinity = 0; /* identity is represented by Z == 0; flag fixed up by caller */
 }
 
 
@@ -80,22 +133,29 @@ static void CMovePoint(ec_point_t *dest, const ec_point_t *src, uint64_t sel) {
     dest->infinity = (uint8_t)((dest->infinity & ~inf_mask) | (src->infinity & inf_mask));
 }
 
+/* Branch-free negation in homogeneous coordinates: (X, p-Y, Z).
+ * The identity (0 : 1 : 0) maps to (0 : p-1 : 0), which is the same
+ * projective point, so no special case is needed. */
 static void ConditionalNegatePoint(const ec_domain_params_t *curve, const ec_point_t *in, ec_point_t *out, uint64_t sign) {
     ec_point_t neg;
-    ec_negate_point(curve, in, &neg);
+    neg.x = in->x;
+    mod_sub(&curve->p, &in->y, &curve->p, &neg.y);
+    neg.z = in->z;
+    neg.infinity = in->infinity;
     *out = *in;
     CMovePoint(out, &neg, sign);
 }
 
 
-static void PrecomputeTable(const ec_domain_params_t *curve, const ec_point_t *P, ec_point_t *T /*size TABLE_SIZE*/) {
+static void PrecomputeTable(const ec_domain_params_t *curve, const uint256_t *b3,
+                            const ec_point_t *P, ec_point_t *T /*size TABLE_SIZE*/) {
     T[0] = *P;
     ec_point_t twoP;
-    ec_double_point(curve, P, &twoP);
+    ec_complete_add(curve, b3, P, P, &twoP);
 
     for (int j = 1; j < TABLE_SIZE; ++j) {
         // T[j] = T[j-1] + twoP  (so sequence 1P,3P,5P,...)
-        ec_add_point(curve, &T[j-1], &twoP, &T[j]);
+        ec_complete_add(curve, b3, &T[j-1], &twoP, &T[j]);
     }
 }
 
@@ -156,16 +216,23 @@ static void ec_wnaf_encode_const(const uint256_t *n, uint256_t *d) {
     }
 }
 
-static void wnaf_mul_const(const ec_domain_params_t *curve, const ec_point_t *P_proj, const uint256_t *d, ec_point_t *Q_proj) {
+/* P_h must be in homogeneous projective coordinates (identity = (0:1:0)).
+ * Every group operation in the loop is a complete addition, so there is
+ * no secret-dependent control flow at this level. Zero digits add the
+ * identity instead of skipping the addition. */
+static void wnaf_mul_const(const ec_domain_params_t *curve, const ec_point_t *P_h, const uint256_t *d, ec_point_t *Q_h) {
     ec_point_t T[TABLE_SIZE];
-    PrecomputeTable(curve, P_proj, T);
-    PointSetIdentity(Q_proj);
+    uint256_t b3;
+
+    mod_add(&curve->b, &curve->b, &curve->p, &b3);
+    mod_add(&b3, &curve->b, &curve->p, &b3);
+
+    PrecomputeTable(curve, &b3, P_h, T);
+    PointSetIdentity(Q_h);
 
     for (int idx = L - 1; idx >= 0; --idx) {
 
-        ec_point_t Qd;
-        ec_double_point(curve, Q_proj, &Qd);
-        *Q_proj = Qd;
+        ec_complete_add(curve, &b3, Q_h, Q_h, Q_h);
 
         uint64_t abs_val = d[idx].limb[0];
         uint64_t sign_bit = d[idx].limb[1] & 1ULL;
@@ -183,9 +250,7 @@ static void wnaf_mul_const(const ec_domain_params_t *curve, const ec_point_t *P_
         ec_point_t A;
         ConditionalNegatePoint(curve, &S, &A, sign_bit & mask_nonzero);
 
-        ec_point_t Qnew;
-        ec_add_point(curve, Q_proj, &A, &Qnew);
-        *Q_proj = Qnew;
+        ec_complete_add(curve, &b3, Q_h, &A, Q_h);
     }
 }
 
@@ -306,13 +371,11 @@ void ec_double_point(const ec_domain_params_t *curve, const ec_point_t *P, ec_po
 
 
 void ec_add_point(const ec_domain_params_t *curve, const ec_point_t *P, const ec_point_t *Q, ec_point_t *R) {
-    
-    
-    if (uint256_cmp(&P->x, &Q->x) == 0 && uint256_cmp(&P->y, &Q->y) == 0) { 
-        ec_double_point(curve, P, R);
-        return;
-    }
-    
+
+    /* Note: equality of P and Q cannot be decided by comparing raw Jacobian
+     * coordinates (equal X/Y with different Z are different affine points).
+     * The doubling case is detected below via H == 0 && r == 0. */
+
     if (P->infinity) {
         *R = *Q;
         return;
@@ -446,7 +509,8 @@ int ec_point_on_curve(const ec_domain_params_t *curve, const ec_point_t *P) {
 
 
     mod_mul(&P->y, &P->y, &curve->p, &y2);
-    mod_exp(&P->x, &(uint256_t){{3, 0, 0, 0}}, &curve->p, &x3);
+    mod_mul(&P->x, &P->x, &curve->p, &x3);
+    mod_mul(&P->x, &x3, &curve->p, &x3);
     mod_mul(&curve->a, &P->x, &curve->p, &ax);
     mod_add(&x3, &ax, &curve->p, &rhs);
     mod_add(&rhs, &curve->b, &curve->p, &rhs);
@@ -455,11 +519,40 @@ int ec_point_on_curve(const ec_domain_params_t *curve, const ec_point_t *P) {
 }
 
 void ec_scalar_multiply(const ec_domain_params_t *curve, const uint256_t *k, const ec_point_t *P, ec_point_t *R) {
-    
-    /* constant time wnaf */
+
+    /* Fixed-length wNAF ladder built on complete addition formulas.
+     * P may be affine or Jacobian (only its public shape is branched on);
+     * the result is returned in affine form (z == 1). */
 
     uint256_t d[L];
-    ec_wnaf_encode_const(k, d);
-    wnaf_mul_const(curve, P, d, R);
+    ec_point_t A, Q;
 
+    ec_jacobian_to_affine(curve, P, &A);
+
+    if (A.infinity) {
+        /* k * O == O */
+        memset(R, 0, sizeof(*R));
+        R->infinity = 1;
+        return;
+    }
+
+    /* affine (x, y) -> homogeneous (x : y : 1); A.z is already 1 */
+
+    ec_wnaf_encode_const(k, d);
+    wnaf_mul_const(curve, &A, d, &Q);
+
+    /* homogeneous -> affine: (X : Y : Z) -> (X/Z, Y/Z); Z == 0 is the identity */
+    if (uint256_is_zero(&Q.z)) {
+        memset(R, 0, sizeof(*R));
+        R->infinity = 1;
+        return;
+    }
+
+    uint256_t z_inv;
+    mod_inv(&Q.z, &curve->p, &z_inv);
+    mod_mul(&Q.x, &z_inv, &curve->p, &R->x);
+    mod_mul(&Q.y, &z_inv, &curve->p, &R->y);
+    memset(&R->z, 0, sizeof(R->z));
+    R->z.limb[0] = 1;
+    R->infinity = 0;
 }

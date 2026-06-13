@@ -6,9 +6,9 @@
 #include "kdf.h"
 #include "hmac.h"
 #include "sha256.h"
+#include "secure_wipe.h"
 
 #include <string.h>
-#include <stdio.h>
 
 void hkdf_extract(const uint8_t *salt, size_t salt_len, const uint8_t *ikm, size_t ikm_len, uint8_t prk[32]) {
     
@@ -65,11 +65,13 @@ int hkdf_expand(const uint8_t prk[32],
         size_t to_copy = (okm_len - offset < 32) ? (okm_len - offset) : 32;
         memcpy(okm + offset, T, to_copy);
         offset += to_copy;
-        
+
         counter++;
+
+        secure_wipe(hmac_input, hmac_input_len);
     }
-    
-    memset(T, 0, 32);
+
+    secure_wipe(T, 32);
     
     return 0;
 }
@@ -84,8 +86,8 @@ int hkdf(const uint8_t *salt, size_t salt_len,
     hkdf_extract(salt, salt_len, ikm, ikm_len, prk);
     
     int result = hkdf_expand(prk, info, info_len, okm, okm_len);
-    
-    memset(prk, 0, 32);
+
+    secure_wipe(prk, 32);
     
     return result;
 }
@@ -106,8 +108,8 @@ int ecdh_derive_key(const uint256_t *shared_secret,
                       secret_bytes, 32,
                       (const uint8_t *)info, strlen(info),
                       output, output_len);
-    
-    memset(secret_bytes, 0, 32);
+
+    secure_wipe(secret_bytes, 32);
     
     return result;
 }

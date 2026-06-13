@@ -4,6 +4,10 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
     uint8_t data[64];
     uint32_t datalen;
@@ -16,5 +20,8 @@ void sha256_update(SHA256_ctx_t *ctx, const uint8_t data[], size_t len);
 void sha256_final(SHA256_ctx_t *ctx, uint8_t hash[32]);
 void sha256(const uint8_t *data, size_t len, uint8_t hash[32]);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif

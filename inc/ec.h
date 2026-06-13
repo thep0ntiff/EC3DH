@@ -3,6 +3,9 @@
 
 #include <modplus.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef struct {
     uint256_t x;
@@ -26,5 +29,9 @@ void ec_scalar_multiply(const ec_domain_params_t *curve, const uint256_t *k, con
 void ec_jacobian_to_affine(const ec_domain_params_t *curve, const ec_point_t *P, ec_point_t *R);
 void ec_double_point(const ec_domain_params_t *curve, const ec_point_t *P, ec_point_t *R);
 int ec_point_on_curve(const ec_domain_params_t *curve, const ec_point_t *P);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

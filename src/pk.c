@@ -5,69 +5,88 @@
  * This file contains everything used for creating the private key/scalar
 */
 
+#if defined(__linux__)
+#define _GNU_SOURCE /* must precede all includes for getrandom() */
+#endif
+
 #include "pk.h"
 #include "ec.h"
+#include "secure_wipe.h"
 
-#include <stdio.h>
 #include <string.h>
 #include <modplus.h>
 
-#if LINUX
-#define _GNU_SOURCE
-#include <unistd.h>
-#include <stddef.h>
-#include <stddef.h>
-#include <sys/random.h>
-#include <errno.h>
-#else
+#if defined(_WIN32)
 #include <windows.h>
 #include <bcrypt.h>
 // Link with bcrypt.lib: add -lbcrypt to linker flags
 #pragma comment(lib, "bcrypt.lib")
-
+#elif defined(__APPLE__)
+#include <sys/random.h>
+#include <unistd.h>
+#else
+#include <unistd.h>
+#include <stddef.h>
+#include <sys/random.h>
+#include <errno.h>
 #endif
 
 
 ssize_t kp_getrandom_bytes(void *buf, size_t buflen, unsigned int flags) {
-#if LINUX
-    size_t off = 0;
-    while (off < buflen) {
-        
-        ssize_t r = getrandom((char *)buf + off, buflen - off, flags);
-        if (r < 0) {
-            if (errno == EINTR) continue;
-            memset(buf, 0, buflen);
-            return -1;
-        }
-        off += (size_t)r;
-
-    }
-    return (ssize_t)off;
-#else
+#if defined(_WIN32)
+    (void)flags;
     NTSTATUS status = BCryptGenRandom(
         NULL,
         (PUCHAR)buf,
         (ULONG)buflen,
         BCRYPT_USE_SYSTEM_PREFERRED_RNG
     );
-    
+
     if (!BCRYPT_SUCCESS(status)) {
         return -1;
     }
-    
+
     return (ssize_t)buflen;
+#elif defined(__APPLE__)
+    (void)flags;
+    size_t off = 0;
+    while (off < buflen) {
+        /* getentropy() is limited to 256 bytes per call */
+        size_t chunk = buflen - off;
+        if (chunk > 256) chunk = 256;
+        if (getentropy((char *)buf + off, chunk) != 0) {
+            secure_wipe(buf, buflen);
+            return -1;
+        }
+        off += chunk;
+    }
+    return (ssize_t)off;
+#else
+    size_t off = 0;
+    while (off < buflen) {
+
+        ssize_t r = getrandom((char *)buf + off, buflen - off, flags);
+        if (r < 0) {
+            if (errno == EINTR) continue;
+            secure_wipe(buf, buflen);
+            return -1;
+        }
+        off += (size_t)r;
+
+    }
+    return (ssize_t)off;
 #endif
 }
 
 int kp_generate_private_key(const ec_domain_params_t *curve, uint256_t *private_key) {
     unsigned char bytes[BUFLEN];
     ssize_t result;
-    int rare_event = 0;
 
     do {
         result = kp_getrandom_bytes(bytes, BUFLEN, 0);
         if (result < 0) {
-            memset(bytes, 0, BUFLEN);
+            secure_wipe(bytes, BUFLEN);
+            secure_wipe(private_key, sizeof(*private_key));
             return -1;
         }
 
@@ -82,30 +101,10 @@ int kp_generate_private_key(const ec_domain_params_t *curve, uint256_t *private_
                 ((uint64_t)bytes[i * 8 + 1] << 48)  |
                 ((uint64_t)bytes[i * 8 + 0] << 56);
         }
-        if ((uint256_cmp(private_key, &curve->n) >= 0) || uint256_is_zero(private_key)) { // Leak!
-            rare_event = 1;
-        }
-
 
     } while (uint256_cmp(private_key, &curve->n) >= 0 || uint256_is_zero(private_key));
 
-    memset(bytes, 0, BUFLEN);
-
-    if (rare_event) {
-        printf("\n");
-        printf("╔═══════════════════════════════════════════════════════════╗\n");
-        printf("║  🎰 JACKPOT! YOU HIT THE 1-IN-4.3-BILLION CASE! 🎰        ║\n");
-        printf("║                                                           ║\n");
-        printf("║  Generated random value exceeded curve order!             ║\n");
-        printf("║  Probability: ~0.0000000233%%                             ║\n");
-        printf("║                                                           ║\n");
-        printf("║  Illusion appears, illusion ceases                        ║\n");
-        printf("║  The biggest illusion among all is our body               ║\n");
-        printf("║  Once a pacified heart finds its place                    ║\n");
-        printf("║  There's no such body to look for                         ║\n");
-        printf("╚═══════════════════════════════════════════════════════════╝\n");
-        printf("\n");
-    }
+    secure_wipe(bytes, BUFLEN);
 
     return 0;
 }

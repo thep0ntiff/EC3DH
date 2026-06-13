@@ -99,7 +99,7 @@ void sha256_init(SHA256_ctx_t *ctx) {
 
 void sha256_update(SHA256_ctx_t *ctx, const uint8_t data[], size_t len) {
 
-    uint32_t i;
+    size_t i;
 
     for (i = 0; i < len; ++i) {
         ctx->data[ctx->datalen] = data[i];

@@ -56,3 +56,7 @@ dkms.conf
 
 # build
 build
+
+# binaries
+main
+tests/kat

@@ -6,6 +6,7 @@
 */
 
 #include "ec.h"
+#include "curve_params.h"
 
 const ec_domain_params_t secp256r1 = {
     .p = { .limb = { 

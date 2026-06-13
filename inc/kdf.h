@@ -5,6 +5,10 @@
 #include <stddef.h>
 #include "ec.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* HKDF-Extract: Extracts a pseudorandom key from input key material */
 void hkdf_extract(const uint8_t *salt, size_t salt_len,
                   const uint8_t *ikm, size_t ikm_len,
@@ -26,5 +30,9 @@ int ecdh_derive_key(const uint256_t *shared_secret,
                     const char *info,
                     uint8_t *output,
                     size_t output_len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

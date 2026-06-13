@@ -20,6 +20,7 @@ ifeq ($(DETECTED_OS),Windows)
     MKDIR = mkdir
     CP = copy
     LDFLAGS = -shared -lmodplus -lbcrypt
+    TEST_LIBS = -lmodplus -lbcrypt
     INSTALL_DIR = C:\Windows\System32
     PATH_SEP = \\
     CFLAGS += -DWINDOWS=1 -DLINUX=0
@@ -32,6 +33,7 @@ else ifeq ($(DETECTED_OS),Linux)
     MKDIR = mkdir -p
     CP = sudo cp
     LDFLAGS = -shared -lmodplus
+    TEST_LIBS = -lmodplus
     INSTALL_DIR = /usr/local/lib
     PATH_SEP = /
     CFLAGS += -DLINUX=1 -DWINDOWS=0
@@ -44,6 +46,7 @@ else ifeq ($(DETECTED_OS),Darwin)
     MKDIR = mkdir -p
     CP = sudo cp
     LDFLAGS = -shared -lmodplus
+    TEST_LIBS = -lmodplus
     INSTALL_DIR = /usr/local/lib
     PATH_SEP = /
     CFLAGS += -DLINUX=1 -DWINDOWS=0
@@ -61,8 +64,12 @@ OBJS := $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 # Example files
 EXAMPLE_SRC := examples/main.c
 
+# Test files
+TEST_SRC := tests/kat.c
+TEST_BIN := tests/kat
+
 # Phony targets
-.PHONY: all clean install uninstall debug help
+.PHONY: all clean install uninstall debug help test
 
 # Default target
 all: $(LIB) $(EXAMPLE)
@@ -82,6 +89,11 @@ $(EXAMPLE): $(EXAMPLE_SRC) $(LIB)
 # Create build directory
 $(OBJ_DIR):
 	$(MKDIR) $(OBJ_DIR)
+
+# Build and run known-answer tests
+test: $(OBJS) $(TEST_SRC)
+	$(CC) $(CFLAGS) -o $(TEST_BIN) $(TEST_SRC) $(OBJS) $(TEST_LIBS)
+	./$(TEST_BIN)
 
 # Install library to system
 install: $(LIB)
